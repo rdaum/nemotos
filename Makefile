@@ -147,6 +147,9 @@ WITH_AES=1
 # Include EmuCON
 WITH_CLI=1
 
+# Add an ELF32 binary loader in addition to TOS binary support
+WITH_ELFBIN=0
+
 #
 # crude machine detection (Unix or Cygwin)
 #
@@ -262,7 +265,7 @@ WARNFLAGS += -Werror=type-limits
 endif
 endif
 
-DEFINES = $(LOCALCONF) -DWITH_AES=$(WITH_AES) -DWITH_CLI=$(WITH_CLI) $(DEF)
+DEFINES = $(LOCALCONF) -DWITH_AES=$(WITH_AES) -DWITH_CLI=$(WITH_CLI) -DWITH_ELFBIN=$(WITH_ELFBIN) $(DEF)
 CFLAGS = $(MULTILIBFLAGS) $(TOOLCHAIN_CFLAGS) $(OPTFLAGS) $(OTHERFLAGS) $(WARNFLAGS) $(INC) $(DEFINES)
 
 CPPFLAGS = $(CFLAGS)
@@ -311,6 +314,9 @@ bdos_src = bdosmain.c console.c fsbuf.c fsdir.c fsdrive.c fsfat.c fsglob.c \
            fshand.c fsio.c fsmain.c fsopnclo.c iumem.c kpgmld.c osmem.c \
            proc.c rwa.S time.c umem.c
 
+ifeq ($(WITH_ELFBIN),1)
+bdos_src += elf.c
+endif
 #
 # source code in util/
 #

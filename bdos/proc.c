@@ -23,10 +23,13 @@
 #include "gemerror.h"
 #include "biosbind.h"
 #include "string.h"
+#include "kprint.h"
 #include "biosext.h"
 #include "asm.h"
 #include "has.h"
-
+#if WITH_ELFBIN
+#include "elf.h"
+#endif
 
 /*
  * defines
@@ -185,7 +188,12 @@ long xexec(WORD flag, char *path, char *tail, char *env)
     LONG rc;
     long max, needed;
     FH fh;
+#if WITH_ELFBIN
+    BOOL is_elf;
+    elf_context elfc;
 
+    is_elf = FALSE;
+#endif
     KDEBUG(("BDOS xexec: flag or mode = %d\n",flag));
 
     /* first branch - actions that do not require loading files */
@@ -272,11 +280,30 @@ long xexec(WORD flag, char *path, char *tail, char *env)
      * jump directly back to bdosmain.c, which is not a problem because
      * we haven't allocated anything yet.
      */
-    rc = kpgmhdrld(fh, &hdr);
-    if (rc) {
-        KDEBUG(("BDOS xexec: kpgmhdrld returned %ld (0x%lx)\n",rc,rc));
+    rc = kpgmhdrld(path, &hdr);
+    if (rc)
+    {
+      KDEBUG(("BDOS xexec: kpgmhdrld returned %ld (0x%lx)\n", rc, rc));
+#if WITH_ELFBIN
+      rc = elf_detect(fh);
+      if (rc) {
+        KDEBUG(("BDOS xexec: elf_detect_header returned %ld (0x%lx)\n", rc, rc));
+
         xclose(fh);
         return rc;
+      }
+      rc = elf_header_load(fh, &hdr, &elfc);
+      if (rc) {
+        KDEBUG(("BDOS xexec: elf_header_load returned %ld (0x%lx)\n", rc, rc));
+
+        xclose(fh);
+        return rc;
+      }
+      is_elf = TRUE;
+#else
+      xclose(fh);
+      return rc;
+#endif
     }
 
     /* allocate the environment first, depending on memory policy */
@@ -333,7 +360,15 @@ long xexec(WORD flag, char *path, char *tail, char *env)
     }
 
     /* now, load the rest of the program, perform relocation, close the file */
+#if WITH_ELFBIN
+    if (is_elf) {
+        rc = elf_do_load(cur_p, &hdr, fh, &elfc);
+    } else {
+        rc = kpgmld(cur_p, fh, &hdr);
+    }
+#else
     rc = kpgmld(cur_p, fh, &hdr);
+#endif
     if (rc) {
         KDEBUG(("BDOS xexec: kpgmld returned %ld (0x%lx)\n",rc,rc));
         /* free any memory allocated yet */
